@@ -21,10 +21,52 @@ limitations under the License.
 
 #include "tensorflow/lite/kernels/internal/common.h"
 #include "tensorflow/lite/kernels/internal/types.h"
+#include "tensorflow/lite/core/c/common.h"
 
 namespace tflite {
 
 namespace reference_ops {
+namespace {
+  float f16tof32(uint16_t _value)
+{
+  uint16_t sgn, man;
+  int exp;
+  double f;
+
+  sgn = (_value & 0x8000) > 0;
+  exp = (_value & 0x7C00) >> 10;
+  man = (_value & 0x03FF);
+
+  //  ZERO
+  if ((_value & 0x7FFF) == 0)
+  {
+    return sgn ? -0 : 0;
+  }
+  //  NAN & INF
+  if (exp == 0x001F)
+  {
+    if (man == 0) return sgn ? -INFINITY : INFINITY;
+    else return NAN;
+  }
+
+  //  SUBNORMAL/NORMAL
+  if (exp == 0)  f = 0;
+  else           f = 1;
+
+  //  PROCESS MANTISSE
+  for (int i = 9; i >= 0; i--)
+  {
+    f *= 2;
+    if (man & (1 << i)) f = f + 1;
+  }
+  f = f * pow(2.0, exp - 25);
+  if (exp == 0)
+  {
+    f = f * pow(2.0, -13);    // 5.96046447754e-8;
+  }
+  return sgn ? -f : f;
+}
+}
 
 // Dequantizes into a float without rounding.
 template <typename InputT, typename OutputT>
@@ -40,6 +82,18 @@ inline void Dequantize(const tflite::DequantizationParams& op_params,
     const int32_t val = input_data[i];
     const OutputT result = static_cast<OutputT>(scale * (val - zero_point));
     output_data[i] = result;
+  }
+}
+
+// Dequantizes into a float without rounding.
+inline void Dequantize(const tflite::DequantizationParams& op_params,
+                       const RuntimeShape& input_shape,
+                       const TfLiteFloat16* input_data,
+                       const RuntimeShape& output_shape, float* output_data) {
+  const int flat_size = MatchingFlatSize(input_shape, output_shape);
+
+  for (int i = 0; i < flat_size; i++) {
+    output_data[i] = f16tof32(input_data[i].data);
   }
 }
 
