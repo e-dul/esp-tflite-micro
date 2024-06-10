@@ -51,7 +51,7 @@ constexpr int scratchBufSize = 39 * 1024;
 constexpr int scratchBufSize = 0;
 #endif
 // An area of memory to use for input, output, and intermediate arrays.
-constexpr int kTensorArenaSize = 81 * 1024 + scratchBufSize;
+constexpr int kTensorArenaSize = 4245 * 1024 + scratchBufSize;
 static uint8_t *tensor_arena;//[kTensorArenaSize]; // Maybe we should move this to external
 }  // namespace
 
@@ -67,7 +67,7 @@ void setup() {
   }
 
   if (tensor_arena == NULL) {
-    tensor_arena = (uint8_t *) heap_caps_malloc(kTensorArenaSize, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    tensor_arena = (uint8_t *) heap_caps_malloc(kTensorArenaSize, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
   }
   if (tensor_arena == NULL) {
     printf("Couldn't allocate memory of %d bytes\n", kTensorArenaSize);
@@ -82,12 +82,22 @@ void setup() {
   //
   // tflite::AllOpsResolver resolver;
   // NOLINTNEXTLINE(runtime-global-variables)
-  static tflite::MicroMutableOpResolver<5> micro_op_resolver;
+  static tflite::MicroMutableOpResolver<15> micro_op_resolver;
   micro_op_resolver.AddAveragePool2D();
   micro_op_resolver.AddConv2D();
   micro_op_resolver.AddDepthwiseConv2D();
   micro_op_resolver.AddReshape();
+  micro_op_resolver.AddQuantize();
+  micro_op_resolver.AddMul();
+  micro_op_resolver.AddSub();
+  micro_op_resolver.AddPad();
+  micro_op_resolver.AddMean();
+  micro_op_resolver.AddFullyConnected();
   micro_op_resolver.AddSoftmax();
+  micro_op_resolver.AddDequantize();
+  micro_op_resolver.AddMaxPool2D();
+  micro_op_resolver.AddAdd();
+  micro_op_resolver.AddLogistic();
 
   // Build an interpreter to run the model with.
   // NOLINTNEXTLINE(runtime-global-variables)
@@ -119,28 +129,49 @@ void setup() {
 // The name of this function is important for Arduino compatibility.
 void loop() {
   // Get image from provider.
-  if (kTfLiteOk != GetImage(kNumCols, kNumRows, kNumChannels, input->data.int8)) {
+  if (kTfLiteOk != GetImage(kNumCols, kNumRows, kNumChannels, input->data.f)) {
     MicroPrintf("Image capture failed.");
   }
-
+  vTaskDelay(1); // to avoid watchdog trigger
+  long long start_time = esp_timer_get_time();
   // Run the model on this input and make sure it succeeds.
   if (kTfLiteOk != interpreter->Invoke()) {
     MicroPrintf("Invoke failed.");
   }
-
+  long long total_time = (esp_timer_get_time() - start_time);
+  printf("Inference time = %lldms\n", total_time / 1000);
   TfLiteTensor* output = interpreter->output(0);
 
+    // Find the current highest scoring category.
+  int current_top_index = kCategoryNothing;
+  float current_top_score = 0.5; // min threshodl
+  for (int i = 0; i < kCategoryCount; ++i) {
+    float val = output->data.f[i];
+    if (val > current_top_score) {
+      current_top_score = val;
+      current_top_index = i;
+    }
+  }
+  if (current_top_index != kCategoryNothing) {
+    const char* current_top_label = kCategoryLabels[current_top_index];
+    // Serial.println(current_top_label);
+    // Serial.println(current_top_score);
+    // Serial.println(current_min_score);
+    MicroPrintf("top 1: %d %s", static_cast<int>(current_top_score * 100), current_top_label);
+  }
+
+
   // Process the inference results.
-  int8_t person_score = output->data.uint8[kPersonIndex];
-  int8_t no_person_score = output->data.uint8[kNotAPersonIndex];
+  // int8_t person_score = output->data.uint8[kPersonIndex];
+  // int8_t no_person_score = output->data.uint8[kNotAPersonIndex];
 
-  float person_score_f =
-      (person_score - output->params.zero_point) * output->params.scale;
-  float no_person_score_f =
-      (no_person_score - output->params.zero_point) * output->params.scale;
+  // float person_score_f =
+  //     (person_score - output->params.zero_point) * output->params.scale;
+  // float no_person_score_f =
+  //     (no_person_score - output->params.zero_point) * output->params.scale;
 
-  // Respond to detection
-  RespondToDetection(person_score_f, no_person_score_f);
+  // // Respond to detection
+  // RespondToDetection(person_score_f, no_person_score_f);
   vTaskDelay(1); // to avoid watchdog trigger
 }
 #endif
@@ -196,12 +227,12 @@ void run_inference(void *ptr) {
   TfLiteTensor* output = interpreter->output(0);
 
   // Process the inference results.
-  int8_t person_score = output->data.uint8[kPersonIndex];
-  int8_t no_person_score = output->data.uint8[kNotAPersonIndex];
+  // int8_t person_score = output->data.uint8[kPersonIndex];
+  // int8_t no_person_score = output->data.uint8[kNotAPersonIndex];
 
-  float person_score_f =
-      (person_score - output->params.zero_point) * output->params.scale;
-  float no_person_score_f =
-      (no_person_score - output->params.zero_point) * output->params.scale;
-  RespondToDetection(person_score_f, no_person_score_f);
+  // float person_score_f =
+  //     (person_score - output->params.zero_point) * output->params.scale;
+  // float no_person_score_f =
+  //     (no_person_score - output->params.zero_point) * output->params.scale;
+  // RespondToDetection(person_score_f, no_person_score_f);
 }

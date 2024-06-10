@@ -1,0 +1,12 @@
+{
+    "idf.adapterTargetName": "esp32s3",
+    "idf.openOcdConfigs": [
+        "board/esp32s3-bridge.cfg"
+    ],
+    "idf.flashType": "UART",
+    "idf.portWin": "COM7",
+    "files.associations": {
+        "xutility": "cpp",
+        "ratio": "cpp"
+    }
+}

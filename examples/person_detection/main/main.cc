@@ -38,6 +38,7 @@ void tf_main(void) {
 }
 
 extern "C" void app_main() {
+  // change prio 8 to 0 when testing very long inference
   xTaskCreate((TaskFunction_t)&tf_main, "tf_main", 4 * 1024, NULL, 8, NULL);
   vTaskDelete(NULL);
 }

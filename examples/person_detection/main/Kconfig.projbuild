@@ -29,7 +29,7 @@ menu "Camera Configuration"
 depends on !TFLITE_USE_BSP
 choice CAMERA_MODULE
     bool "Select Camera Pinout"
-    default CAMERA_MODULE_WROVER_KIT
+    default CAMERA_MODULE_XIAO_ESP32S3
     help
         Select Camera Pinout.
 
@@ -51,6 +51,8 @@ choice CAMERA_MODULE
         bool "ESP32-CAM by AI-Thinker"
     config CAMERA_MODULE_CUSTOM
         bool "Custom Camera Pinout"
+    config CAMERA_MODULE_XIAO_ESP32S3
+        bool "XIAO-ESP32S3 by SEEED Studio"
 endchoice
 
 config CAMERA_PIN_PWDN
